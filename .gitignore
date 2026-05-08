@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+build/
+dist/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Data & artifacts (大文件不进 git)
+data/
+checkpoints/
+outputs/
+runs/
+wandb/
+*.ckpt
+*.pth
+*.safetensors
+*.usd
+*.usdc
+*.usda
+*.ply
+
+# 子模块产物
+third_party/*/build/
+third_party/*/dist/
+
+# 本地配置
+.env
+.env.local
+config.local.yaml
