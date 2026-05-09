@@ -1,6 +1,7 @@
-# AutoSim 依赖清单 v3 (2026-05-08)
+# AutoSim 依赖清单 v4-final (2026-05-09)
 # 目标：Python 3.10 / CUDA 12.1 / PyTorch 2.4 / 单机 H100 起步
-# 注释里 [git] = 必须 git submodule，[docker] = docker 镜像，[pip] = pip 装
+# 项目性质：自研、非商用 → CC-BY-NC / OML 不构成约束
+# 注释里 [git] = 必须 git submodule，[docker] = docker 镜像，[hf] = HuggingFace
 
 # --- 基础 ---
 numpy>=1.26
@@ -16,50 +17,59 @@ loguru>=0.7
 torch>=2.4
 torchvision>=0.19
 
-# --- 3DGS 渲染（v3 主路径）---
-gsplat>=1.5.0           # ★ 主 renderer，支持 3DGUT 模式 (with_ut, with_eval3d, viewmats_rs)
+# --- 3DGS 渲染（Track C） ---
+gsplat>=1.5.3            # ★ 主 renderer for Track C，支持 3DGUT (with_ut, viewmats_rs)
 nerfacc>=0.5
-# DriveStudio + OmniRe: [git] github.com/ziyc/drivestudio  (训练管线)
+# DriveStudio + OmniRe (训练管线): [git] github.com/ziyc/drivestudio
 # 备选/对照: SplatAD: [git] github.com/carlinds/splatad
-# 闭环评测: HUGSIM: [git] github.com/hyzhou404/HUGSIM
-# 不再使用: NuRec docker (闭源)、3DGRUT (仅 OptiX 反射时启用)
+# 闭环评测: HUGSIM: [git] github.com/hyzhou404/HUGSIM (Phase 3)
 
-# --- CARLA 闭环骨架（v3 主路径）---
-# CARLA 0.10.0: [docker] carlasim/carla:0.10.0  (默认)
-# CARLA 0.9.16: [docker] carlasim/carla:0.9.16  (兜底，UE4)
-# ScenarioRunner: [git] github.com/carla-simulator/scenario_runner
-# OpenSCENARIO 2.0 解析: ScenarioRunner 内置 (ANTLR4)
-carla>=0.10.0           # CARLA Python API (egg 文件，docker 内提供；本地开发可装 wheel)
-# Scenic (可选 DSL): pip install scenic>=3.0
+# --- CARLA 闭环骨架（Track A1+A2 双轨） ---
+# CARLA 0.9.16 (UE4): [docker] carlasim/carla:0.9.16  (★ A1 主，Bench2Drive 兼容)
+# CARLA 0.10.0 (UE5): [docker] carlasim/carla:0.10.0  (☆ A2 实验，dead branch 风险已知)
+# ScenarioRunner: [git] github.com/carla-simulator/scenario_runner (锁 0.9.16 主线)
+# OpenSCENARIO 2.0: ScenarioRunner 内置 (ANTLR4)；actor flow 可能是 stub
+# Bench2Drive: [git] github.com/Thinklab-SJTU/Bench2Drive (锁 0.9.15，与 0.9.16 ABI 通常兼容)
+carla>=0.9.16            # CARLA Python API (egg 文件，docker 内提供；本地开发可装 wheel)
+# Scenic 3.x (可选 DSL): pip install scenic>=3.0  (Phase 3 才考虑)
 
-# --- gRPC bridge (v3 新增) ---
-grpcio>=1.65
-grpcio-tools>=1.65
-protobuf>=5
-
-# --- 世界模型 (alternative renderer，可选) ---
+# --- 世界模型 / Cosmos（Track B） ---
 diffusers>=0.30
 transformers>=4.45
 accelerate>=0.34
-# Cosmos-Predict2.5: [git] github.com/nvidia-cosmos/cosmos-predict2.5  (Apache + Open Model License)
-# Vista (备份): [git] github.com/OpenDriveLab/Vista
+peft>=0.13               # LoRA FT for Cosmos
+# Cosmos-Predict2.5: [git] github.com/nvidia-cosmos/cosmos-predict2.5  (Apache + OML)
+# Cosmos 权重: [hf] nvidia/Cosmos-Predict2.5-2B (32GB, 需登录接受 OML)
+# Cosmos-Drive-Dreams 工具链: [git] github.com/nv-tlabs/Cosmos-Drive-Dreams (Apache, 纯 Python)
+# Vista (备份): [git] github.com/OpenDriveLab/Vista  (Apache, 中国数据 fallback)
+
+# --- Senna VLA (Track E2E 副) ---
+# Senna: [git] github.com/hustvl/Senna  (Apache)
+# 权重: [hf] rb93dett/Senna
+# 依赖: vicuna-7b-v1.5 (LLaMA-2 base，权重需自行获取)
+# LLaVA-v1.6-34b 仅训练数据生成端用；推理不必需
 
 # --- E2E 算法 ---
-# SparseDrive: [git] github.com/swc-17/SparseDrive (MVP)
-# UniAD/VAD/DriveTransformer/Hydra-NeXt/DiffusionDrive: 各自仓库，Week 4+
-# mmcv / mmdet / mmdet3d 由各算法 README 自行约束（避免顶层 pin）
+# SparseDriveV2: [git] github.com/swc-17/SparseDriveV2 (★ MVP 主，Apache)
+# 后续接入: UniAD / VAD / DriveTransformer / Hydra-NeXt / DiffusionDrive / DriveLM / OpenEMMA
 
 # --- 评测 ---
 nuscenes-devkit>=1.1.11
-# Bench2Drive: [git] github.com/Thinklab-SJTU/Bench2Drive (CARLA 闭环 220 条 case)
-# NAVSIM: [git] github.com/autonomousvision/navsim (伪闭环)
-# HUGSIM: [git] github.com/hyzhou404/HUGSIM (off-traj KID benchmark)
+# NAVSIM v2: [git] github.com/autonomousvision/navsim (★ 评测库，需自建 Scene pickle adapter)
+# Bench2Drive: 见 CARLA 段
+# HUGSIM: [git] github.com/hyzhou404/HUGSIM (Phase 3 真闭环对照)
 
 # --- 数据集工具 ---
-# ONCE devkit: [git] github.com/once-for-auto-driving/once_devkit  (主)
-# ApolloScape devkit: [git] github.com/ApolloScapeAuto/dataset-api  (兜底)
-# DAIR-V2X: [git] github.com/AIR-THU/DAIR-V2X  (V2X 评测专用，不作重建)
-# DrivingDojo: [git] github.com/Robertwyq/Drivingdojo  (Cosmos FT 数据，可选)
+# nuScenes mini: 直接下载 (~3GB，免审批) ★ MVP 主
+# ApolloScape: [git] github.com/ApolloScapeAuto/dataset-api  (CC-BY-NC，自研可用)
+# DrivingDojo: [hf] Yuqi1997/DrivingDojo (283GB, Apache, 自动条款)
+# DAIR-V2X-V example: Google Drive 子集 (免审批 hello-world)
+# DAIR-V2X devkit: [git] github.com/AIR-THU/DAIR-V2X (全集申请并行)
+# ONCE devkit: [git] github.com/once-for-auto-driving/once_devkit (申请并行)
+# SODA10M: [hf] / soda-2d.github.io (CC-BY-NC-SA, 单帧只能作风格补充)
+
+# --- gRPC ---
+# v4-final 删除 gRPC 依赖：离线让 IPC 复杂度归零，Renderer 用 Python ABC
 
 # --- 开发工具 ---
 ruff>=0.6
@@ -69,8 +79,11 @@ pytest-cov>=5
 ipykernel>=6
 matplotlib>=3.8
 
-# --- 已退出的依赖（不要再加回）---
+# --- 已退出的依赖（不要再加回） ---
 # AlpaSim (NVlabs/alpasim) — 默认 renderer 闭源，第三方 planner 接入未文档
 # WorldEngine (OpenDriveLab/WorldEngine) — 4s pseudo-closed-loop, 硬绑 nuPlan
 # NuRec docker (nvcr.io/nvidia/nre/nre-ga) — 训练管线 + 推理服务全闭源
-# SimScale 作为 agent 框架 — 误读，它是 sim-real 训练辅助
+# SimScale 作为 agent 框架 — 误读，是 sim-real 训练辅助
+# DriveArena — 2024-11 起半停滞
+# 3DGRUT (nv-tlabs) — 仅 OptiX 反射时启用，gsplat 3DGUT 已覆盖
+# MetaDrive / Scenic / Waymax 替代 CARLA — 既然 UE 渲染要保留，CARLA 必装

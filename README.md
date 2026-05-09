@@ -1,61 +1,72 @@
 # AutoSim
 
-纯视觉端到端自动驾驶闭环仿真器。中国城市，运动学车辆，sim2real 落地。
+纯视觉端到端自动驾驶**离线批跑**仿真器。中国城市，运动学车辆，sim2real 落地。**自研、非商用。**
 
 ## 状态
 
-阶段 2（架构 PoC，方向已锁定 v3）— 2026-05-08。仓库刚启动，尚无可运行代码。
+阶段 2（架构 PoC，方向最终锁定 v4-final）— 2026-05-09。仓库刚启动，尚无可运行代码。
 
-## 七个已锁定决策
+## 八个已锁定决策
 
-| # | 决策 | 选定 |
-|---|---|---|
-| D1 | 闭环骨架 | CARLA 0.10/0.9.16（headless 逻辑层，UE 渲染关闭） |
-| D2 | MVP 算法 | SparseDrive |
-| D3 | 首个数据 | ONCE 单段；ApolloScape 兜底 |
-| D4 | 渲染层 | gsplat 1.5 (3DGUT) 推理 + DriveStudio + OmniRe 训练 |
-| D5 | Case 编辑 | OpenSCENARIO 2.0 + ScenarioRunner（继承 Bench2Drive 220 条 + 自写中国 case） |
-| D6 | 渲染路由 | fork NuRec gRPC protobuf，backend 换 gsplat |
-| D7 | 评测脚手架 | HUGSIM（70 序列 + extrapolated KID benchmark） |
+| # | 决策 | 选定 | 评级 |
+|---|---|---|---|
+| D1 | 闭环骨架 | CARLA 0.9.16 (UE4) 主 + CARLA 0.10 (UE5) 副双轨 | 🟡 |
+| D2 | MVP E2E 算法 | SparseDriveV2 主 + Senna 副；横评 Hydra-NeXt / DiffusionDrive / DriveLM / OpenEMMA | 🟢/🟡 |
+| D3 | 首个数据 | nuScenes mini (免审批 MVP) + ApolloScape 北京 + DrivingDojo HF；ONCE / DAIR-V2X 并行申请不阻塞 | 🟢 |
+| D4 | 渲染层（四轨道并列） | A1=CARLA UE4 / A2=CARLA UE5 / B=Cosmos+DrivingDojo LoRA / C=gsplat+DriveStudio | 🟢 |
+| D5 | Case 编辑 | OpenSCENARIO 2.0 + ScenarioRunner；actor flow 可能是 stub，复杂场景退 Python API | 🟡 |
+| D6 | 渲染路由 | Renderer Python ABC（无 gRPC，离线让 IPC 复杂度归零） | 🟢 |
+| D7 | 评测脚手架 | NAVSIM v2 metric 库 + 自建 Scene pickle adapter（~1 周）；HUGSIM 副线 Phase 3 接入 | 🟡 |
+| D8 | 阶段策略 | Phase 1 A1 单轨 → Phase 2 四轨对照 → Phase 3 HUGSIM + 中国 case | 🟢 |
 
-## 核心架构（v3）
+## 核心架构（v4-final）
 
 ```
-CARLA (case + 物理 + 闭环)        ←  OpenSCENARIO 2.0 + ScenarioRunner
-   │  gRPC  (camera_pose, actor_poses, t)
-   ▼
-gsplat 1.5 (3DGUT) Renderer Service
-   ↑
-   │  训练产物 .pt
-   │
-DriveStudio + OmniRe (训练)       ←  ONCE / ApolloScape / DrivingDojo
-   │  RGB (6/8 cam)
-   ▼
-E2E 算法插件 (SparseDrive)         ←  src/autosim/e2e_plugins/protocol.py
-   │  trajectory (K×3)
-   ▼
-自行车模型 + Pure Pursuit
-   │
-   └─→ CARLA apply_control() 闭环
+OSC 2.0 case → CARLA 0.9.16 synchronous (--RenderOffScreen)
+                  ↓ {HDMap, ego, agents, weather, t}
+   ┌──────────────┼──────────────┬──────────────┐
+   ▼              ▼              ▼              ▼
+CARLA UE4     CARLA UE5      Cosmos+LoRA    gsplat 重建
+(主 baseline) (实验视觉)     (生成中国感)   (sim2real 真照片)
+   └──────────────┴──────────────┴──────────────┘
+                  ↓ RGB 6/8 cam
+                  ▼
+            E2E 算法 (Plugin Protocol)
+            SparseDriveV2 / Senna / ...
+                  ↓ trajectory K×3
+                  ▼
+            自行车模型 + Pure Pursuit
+                  ↓
+            CARLA apply_control() 闭环
+                  ↓
+            EPDMS 报告（× 4 轨 × N 算法）
 ```
+
+## Phase 1 W1 必跑的 5 个 hello-world
+
+1. CARLA 0.9.16 H100 headless docker
+2. CARLA 0.10 同上（UE5 试验）
+3. Senna standalone 单图推理
+4. Cosmos-Predict2.5-2B HF 下载链路
+5. ScenarioRunner OSC 2.0 cut-in minimal
+- 并行：DAIR-V2X-V example 子集 + SfM 预处理
 
 ## 已退出主线（不要再考虑）
 
-- **NuRec 容器**：训练管线 + 推理服务全闭源 docker，预训练资产全欧美且不可再分发
-- **AlpaSim**：默认 renderer 仅 NuRec；第三方 planner 接入未文档；外部独立复现 0
-- **WorldEngine**：实际是 4 秒 NAVSIM v2 pseudo-closed-loop demo，硬绑 nuPlan，arXiv 未发
-- **DAIR-V2X 作重建主源**：路端固定相机非 ego-centric，仅作 V2X 评测专用
-- **GAIA-2/3 / 商业街景 / LGSVL / AirSim**：闭源 / ToS 禁止 / 已停服
+NuRec 容器 / AlpaSim 作主线 / WorldEngine / SimScale 作 agent / DriveArena / GAIA-2/3 / 商业街景 / LGSVL / AirSim / DAIR-V2X 作重建主源 / 自研 case DSL / MetaDrive / Scenic / Waymax 替代 CARLA。详见 [docs/architecture.md](docs/architecture.md) 第 7 节。
 
 ## 文档
 
-- [架构 v3](docs/architecture.md)
-- [Week 1 任务](docs/week1_plan.md)
+- [架构 v4-final](docs/architecture.md)
+- [Week 1 任务 v4-final](docs/week1_plan.md)
+- [调研历程与方案演化](docs/research_journey.md) — 6 轮调研 / 15 个 agent 报告 / 4 轮架构反转的完整记录
 
 ## 决策演化
 
-| 版本 | 闭环骨架 | 渲染 | 备注 |
+| 版本 | 主骨架 | 渲染 | 触发反转 |
 |---|---|---|---|
-| v1 | AlpaSim 主 + SimScale 补 | NuRec | SimScale 误读为 agent 框架 |
-| v2 | WorldEngine 主 + AlpaSim 副 | DriveStudio + gsplat | NuRec 闭源被发现 |
-| **v3** | **CARLA（headless）** | **gsplat 1.5 + DriveStudio + OmniRe** | WorldEngine 是 vapor，CARLA gRPC 路由先例 |
+| v1 | AlpaSim 主 + SimScale 补 | NuRec | SimScale 误读；NuRec 闭源 |
+| v2 | WorldEngine 主 + AlpaSim 副 | DriveStudio + gsplat | NuRec/AlpaSim 接入门槛暴露 |
+| v3 | CARLA headless | gsplat 主 + Cosmos 副 | WorldEngine 是 vapor |
+| v4 | CARLA + NAVSIM v2 + 三 renderer | Cosmos 主 + gsplat 副 + CARLA UE | 离线约束 + 三轨道对照 |
+| **v4-final** | **CARLA 0.9.16+0.10 双轨 + NAVSIM v2 metric + 四 renderer** | **A1+A2+B+C** | **sanity 后 CARLA 0.10 死分支风险 + 自研非商用约束放松 + nuScenes mini 作 MVP 首数据避审批** |

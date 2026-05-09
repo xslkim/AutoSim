@@ -1,68 +1,72 @@
-# AutoSim 架构 v3
+# AutoSim 架构 v4-final
 
-> 2026-05-08，方向锁定。基于 7 个并行 SOTA 调研的交叉印证 + 2 轮架构反转结果。
+> 2026-05-09，方向最终锁定。基于 13 个并行 SOTA 调研 + 4 轮架构反转 + 2 轮落地 sanity check。
+> **项目性质：自研、非商用。** 离线批跑（不要求实时）。
 
 ## 0. 决策摘要
 
-| # | 决策 | 选定 | Why |
+| # | 决策 | 选定 | 评级 |
 |---|---|---|---|
-| D1 | 闭环骨架 | **CARLA 0.10/0.9.16（headless 逻辑层）** | 唯一支持 OSC 1.x+2.0 的开源仿真；真长闭环；Bench2Drive 220 条 case 现成；NuRec gRPC 已铺好"逻辑/渲染解耦"先例 |
-| D2 | MVP E2E 算法 | **SparseDrive** | 9 FPS、稀疏 query、不依赖 BEV、Bench2Drive 44 DS、对中国数据迁移友好 |
-| D3 | 首个数据 | **ONCE 单段**；ApolloScape 兜底 | 7 相机环视 + 40 线 LiDAR 结构最接近 Waymo；DriveStudio adapter ~1 周 |
-| D4 | 渲染层 | **gsplat 1.5 (3DGUT) 推理 + DriveStudio + OmniRe 训练** | NuRec 同算法核但完全 Apache + MIT；H100 ~80 FPS @ 6×720p |
-| D5 | Case 编辑 | **OpenSCENARIO 2.0 + ScenarioRunner** | actor-flow 写中国 case 复用率 ~60%，比 1.x 简洁 3 倍；vs 自研 DSL 节省 6–9 人月 |
-| D6 | 渲染路由 | **fork NuRec gRPC protobuf，backend 换 gsplat** | 官方铺好的 IPC，protobuf 定义在 docs.nvidia.com/nurec/api/grpc_api_guide.html |
-| D7 | 评测脚手架 | **HUGSIM** 70 序列 benchmark | 唯一覆盖 extrapolated KID（off-trajectory NVS 质量评测） |
+| D1 | 闭环骨架 | **CARLA 0.9.16 (UE4) 主 + CARLA 0.10 (UE5) 副双轨** | 🟡 |
+| D2 | MVP E2E 算法 | **SparseDriveV2 主 + Senna 副**；后续横评 Hydra-NeXt / DiffusionDrive / DriveLM / OpenEMMA | 🟢/🟡 |
+| D3 | 首个数据 | **nuScenes mini（免审批 MVP）+ ApolloScape 北京 + DrivingDojo HF**；ONCE / DAIR-V2X 并行申请不阻塞 | 🟢 |
+| D4 | 渲染层（四轨道并列） | A1=CARLA UE4 / A2=CARLA UE5 / B=Cosmos+DrivingDojo LoRA / C=gsplat+DriveStudio | 🟢 |
+| D5 | Case 编辑 | OpenSCENARIO 2.0 + ScenarioRunner；actor flow 可能是 stub | 🟡 |
+| D6 | 渲染路由 | Renderer Python ABC（无 gRPC） | 🟢 |
+| D7 | 评测脚手架 | NAVSIM v2 metric + Scene pickle adapter（~1 周）+ HUGSIM 副线 | 🟡 |
+| D8 | 阶段策略 | Phase 1 A1 单轨 → Phase 2 四轨 → Phase 3 HUGSIM + 中国 case | 🟢 |
 
 ## 1. 整体架构
 
 ```
-┌─── CARLA 0.10 / 0.9.16 (case + 物理 + 闭环) ────────────────┐
-│  --RenderOffScreen + no_rendering_mode                       │
-│  • OpenSCENARIO 2.0 + ScenarioRunner                          │
-│  • Traffic Manager + behavior tree + PhysX                    │
-│  • OpenDRIVE HDMap                                            │
-│  • 50–100 Hz state output                                    │
-│  • Bench2Drive 220 条 case + 自写中国 case (~3 人月)          │
-└─────────────────┬─────────────────────────────────────────────┘
-                  │ gRPC (fork NuRec protobuf)
-                  │ {camera_pose, actor_poses, timestamp}
-                  ▼
-┌─── 自建 Renderer Service ─────────────────────────────────────┐
-│  gsplat 1.5 (3DGUT 模式)  [Apache, 5k★]                       │
-│    • rasterization(with_ut=True, with_eval3d=True,            │
-│        viewmats_rs=...)                                        │
-│    • 原生 fisheye / RS / 多相机 batch                          │
-│    • H100 ~80 FPS @ 6×1280×720                                 │
-│    • 胶水代码 ~300–500 行                                      │
-│        ↑                                                       │
-│        │ 训练产物 .pt                                          │
-│  DriveStudio + OmniRe  [MIT, 1.2k★]                           │
-│    • 6 数据集 dataloader + adapter 模式                        │
-│    • 静/动解耦（Static + SMPL + Deformable 行人/骑手）        │
-│    • 中国数据 adapter ~600 行/数据集                           │
-└─────────────────┬─────────────────────────────────────────────┘
-                  │ RGB (6/8 cam)
-                  ▼
-┌─── E2E 算法插件 ──────────────────────────────────────────────┐
-│  SparseDrive (MVP) → Hydra-NeXt / DiffusionDrive / UniAD      │
-│  统一 Plugin Protocol（src/autosim/e2e_plugins/protocol.py）  │
-└─────────────────┬─────────────────────────────────────────────┘
-                  │ trajectory (K×3)
-                  ▼
-            自行车模型 + Pure Pursuit / LQR
-                  │
-                  └─→ CARLA apply_control()  闭环回灌
+┌── Case 描述层 ─────────────────────────────────────────────────┐
+│  OSC 2.0 文件 (ScenarioRunner 解析)                            │
+│  + Bench2Drive 220 case（兼容 0.9.15/0.9.16，免费继承）        │
+│  + 自写中国 case（OSC 2.0 modifier+composition；actor flow     │
+│    退 Python API）                                              │
+└───────────────────┬────────────────────────────────────────────┘
+                    │
+                    ▼
+┌── Scenario Runtime ────────────────────────────────────────────┐
+│  CARLA 0.9.16 synchronous mode + --RenderOffScreen             │
+│  Traffic Manager + behavior tree + PhysX                       │
+│  per-tick dump: {HDMap, ego_pose, actor_poses, weather, t}     │
+│  CARLA 0.10 (UE5) 仅作 A2 轨道 renderer 使用，不作 runtime     │
+└───────────────────┬────────────────────────────────────────────┘
+                    │
+        ┌───────────┴───────────┬───────────────┬──────────────┐
+        ▼                       ▼               ▼              ▼
+┌── Track A1 ───┐      ┌── Track A2 ──┐  ┌── Track B ──┐  ┌── Track C ──┐
+│ CARLA UE4     │      │ CARLA UE5     │  │ Cosmos       │  │ gsplat 3DGUT │
+│ (0.9.16)      │      │ (0.10)        │  │ Predict2.5   │  │ + DriveStudio│
+│               │      │               │  │ + DrivingDojo│  │ + ONCE/Apollo│
+│ 几何 baseline │      │ 视觉升级实验  │  │   LoRA       │  │   重建        │
+│ Bench2Drive   │      │ Lumen+Nanite  │  │ (中国感)     │  │ (sim2real    │
+│   兼容        │      │ (dead branch  │  │ Vista 备份   │  │  黄金对照)   │
+│               │      │   风险已知)   │  │              │  │               │
+└─────┬─────────┘      └──────┬───────┘  └──────┬──────┘  └──────┬──────┘
+      │ RGB                   │                 │                │
+      └──────────┬────────────┴─────────────────┴────────────────┘
+                 ▼
+┌── E2E 算法层（Plugin Protocol，已落地） ─────────────────────┐
+│  MVP 主: SparseDriveV2 (Apache, NAVSIMv2 90.38 EPDMS) ⭐      │
+│  MVP 副: Senna (Apache, 自建 NAVSIM v2 harness)               │
+│  横评: Hydra-NeXt / DiffusionDrive / DriveLM / OpenEMMA       │
+└────────────────────┬─────────────────────────────────────────┘
+                     │ trajectory K×3
+                     ▼
+              自行车模型 + Pure Pursuit / LQR
+                     │ steer/throttle
+                     └─→ CARLA apply_control() 闭环回灌
 
-┌─── 评测脚手架（独立路径） ───────────────────────────────────┐
-│  HUGSIM [MIT]  70 序列 + extrapolated KID benchmark          │
-│  把 closed_loop.py 里 gaussian_renderer 换成我们的 service    │
-└────────────────────────────────────────────────────────────┘
-
-┌─── 可选 alternative renderer ────────────────────────────────┐
-│  Cosmos-Predict2.5 (Apache+OML) 或 Vista (Apache)            │
-│  CARLA → HDMap+box+ego 条件 → 直接生成图像                    │
-└────────────────────────────────────────────────────────────┘
+┌── 评测层 ──────────────────────────────────────────────────────┐
+│  EPDMS（NAVSIM v2 metric 库 + 自建 Scene pickle adapter）       │
+│  四轨道一致性（A1/A2/B/C 同算法 PDMS 分差，v4-final 独创）      │
+│  HUGSIM HD-Score（Phase 3 真闭环对照）                         │
+└───────────────────┬────────────────────────────────────────────┘
+                    ▼
+              测试报告 (HTML/PDF)
+        case × 算法 × renderer 三维矩阵
 ```
 
 ## 2. 目录结构
@@ -76,109 +80,107 @@ AutoSim/
 │   └── week1_plan.md
 ├── src/
 │   └── autosim/
-│       ├── core/                # 闭环 driver；CARLA client wrapper、tick 循环
-│       ├── bridges/             # ★ v3 新增：CARLA ↔ Renderer gRPC bridge (fork NuRec proto)
-│       ├── renderer/            # gsplat 3DGUT renderer service
+│       ├── core/                # CARLA synchronous wrapper、tick 循环
+│       ├── renderer/            # Renderer ABC + 四个实现
+│       │   ├── base.py          # 抽象基类 (renderer Protocol)
+│       │   ├── carla_ue4.py     # Track A1
+│       │   ├── carla_ue5.py     # Track A2
+│       │   ├── cosmos.py        # Track B
+│       │   └── gsplat_3dgut.py  # Track C
 │       ├── training/            # DriveStudio + OmniRe 训练入口（薄封装）
-│       ├── world_model/         # 可选：Cosmos / Vista 推理（alternative renderer）
+│       ├── world_model/         # Cosmos / Vista LoRA FT 工具
 │       ├── kinematics/          # 自行车模型、Pure Pursuit、LQR
 │       ├── scenarios/           # OSC 2.0 case 加载 + 中国 case 库
 │       ├── e2e_plugins/         # 统一插件协议 + 各算法 adapter
-│       │   ├── protocol.py      # ★ 已落地，见仓库
-│       │   ├── sparsedrive.py
+│       │   ├── protocol.py      # ★ 已落地
+│       │   ├── sparsedrive_v2.py
+│       │   ├── senna.py
 │       │   └── ...
 │       ├── data_adapters/       # 数据集 → DriveStudio 内部格式
-│       │   ├── once.py
+│       │   ├── nuscenes.py
+│       │   ├── once.py          # 等审批通过后启用
+│       │   ├── dair_v2x_v.py
 │       │   ├── apolloscape.py
-│       │   └── nuscenes.py
-│       └── eval/                # HUGSIM / NAVSIM / Bench2Drive 评测钩子
+│       │   └── drivingdojo.py
+│       └── eval/                # NAVSIM v2 + HUGSIM 评测钩子
+│           └── navsim_adapter.py # ★ Scene pickle adapter（~1 周工作量）
 ├── scripts/
-│   ├── reconstruct_scene.py     # 数据 → 3DGS 资产（DriveStudio 训练入口）
+│   ├── reconstruct_scene.py     # 数据 → 3DGS 资产
 │   ├── run_closed_loop.py       # CARLA + Renderer + Plugin 闭环
 │   └── benchmark_e2e.py
-├── scenarios/                   # OSC 2.0 case 文件
-│   ├── chinese/
-│   │   ├── ev_cut_in.osc
-│   │   ├── delivery_rider.osc
-│   │   └── tidal_lane.osc
+├── scenarios/
+│   ├── chinese/                 # 自写中国 case（OSC 2.0 + Python API mix）
 │   └── examples/
-├── proto/                       # ★ v3 新增：gRPC proto 定义（fork NuRec）
-│   └── renderer.proto
 ├── tests/
 └── third_party/                 # git submodule
-    ├── carla/                   # CARLA 仅二进制 docker，源码可不入
     ├── scenario_runner/
-    ├── gsplat/                  # 实际 pip 装，submodule 仅作版本锁
     ├── drivestudio/
-    ├── sparsedrive/
-    └── hugsim/
+    ├── sparsedrive_v2/
+    ├── senna/
+    ├── hugsim/
+    └── cosmos-predict2.5/       # 通过 HF 自动拉，不必 submodule
 ```
 
 ## 3. 关键接口
 
 ### 3.1 E2E 算法插件（已落地）
 
-见 [`src/autosim/e2e_plugins/protocol.py`](../src/autosim/e2e_plugins/protocol.py)。
+见 [`src/autosim/e2e_plugins/protocol.py`](../src/autosim/e2e_plugins/protocol.py)。仿真器只消费 `Action.trajectory`，由 `kinematics/` 的 Pure Pursuit 输出 control 调 CARLA `apply_control()`。
 
-仿真器只消费 `Action.trajectory`（K×3，ego 系），由 `kinematics/` 模块的 Pure Pursuit 跟踪器输出 control 调用 CARLA `apply_control()`——这是支持算法插拔的关键解耦点。Tesla 风格直接控制方案走 `Action.control` 通道（可选）。
+### 3.2 Renderer Python ABC（v4-final 简化，无 gRPC）
 
-### 3.2 Renderer gRPC bridge（v3 新增，Week 3 落地）
+```python
+# src/autosim/renderer/base.py
+from typing import Protocol
+import numpy as np
 
-fork 自 NuRec gRPC：`docs.nvidia.com/nurec/api/grpc_api_guide.html`。
-
-核心 RPC（草案）：
-```protobuf
-service Renderer {
-  rpc Render(RenderRequest) returns (RenderResponse);
-  rpc LoadScene(LoadSceneRequest) returns (LoadSceneResponse);
-}
-message RenderRequest {
-  string scene_id = 1;
-  repeated CameraPose cameras = 2;        // pose + intrinsics + distortion
-  repeated ActorState actors = 3;         // 动态 agent 当前位姿（用于动态 GS 解耦）
-  double timestamp = 4;
-}
-message RenderResponse {
-  repeated bytes images = 1;              // 多相机 PNG/JPEG
-  double render_ms = 2;
-}
+class Renderer(Protocol):
+    def load_scene(self, scene_id: str) -> None: ...
+    def render(
+        self,
+        camera_poses: dict[str, np.ndarray],   # {cam_id: 4x4}
+        intrinsics: dict[str, np.ndarray],
+        actors: list[dict],                    # [{id, pose, type, ...}]
+        weather: str,
+        timestamp: float,
+    ) -> dict[str, np.ndarray]:                # {cam_id: HxWx3 RGB}
+        ...
 ```
 
-### 3.3 Scenario YAML / OSC 2.0 schema（Week 6+）
+四个实现（`carla_ue4.py` / `carla_ue5.py` / `cosmos.py` / `gsplat_3dgut.py`）各自填这个接口。仿真器主循环只看 `Renderer`，与具体后端无关。
 
-**case 直接写 OSC 2.0**，AutoSim 这边只需要：
-- `scenarios/<case>.osc` — OpenSCENARIO 2.0 描述
-- `scenarios/<case>.meta.yaml` — AutoSim 特定元数据（评测指标、horizon、ego 算法切换）
+### 3.3 NAVSIM v2 Scene pickle adapter（v4-final 新增工作量）
 
-```yaml
-scenario_id: chinese_ev_cut_in_001
-osc_file: chinese/ev_cut_in.osc
-ego:
-  algorithm: sparsedrive
-  init_route: [...]
-weather: rain         # CARLA 原生支持
-agents_override:      # 可选 OSC 之外的扩展
-  reactive_traffic: true
-evaluation:
-  metrics: [PDMS, success_rate, comfort, off_traj_KID]
-  horizon_s: 30
+NAVSIM v2 的 EPDMS 不能 `from navsim.metrics import EPDMS` 直接调，必须把自定义 scenario 转成 NAVSIM 的 `Scene` pickle 协议。`src/autosim/eval/navsim_adapter.py` 完成：
+
+```python
+def autosim_log_to_navsim_scene(autosim_log: dict) -> "navsim.Scene":
+    """把我们闭环 rollout 的日志转成 NAVSIM 的 Scene pickle 格式
+       供 EPDMS 计算。"""
+    ...
 ```
 
-## 4. 数据流（单 tick，10 Hz）
+预估 ~1 人周。
+
+### 3.4 Scenario YAML / OSC 2.0 schema（Phase 2 落地）
+
+case 直接写 OSC 2.0 文件；AutoSim 这边 `scenarios/<case>.osc` + `scenarios/<case>.meta.yaml`。actor flow 受限时退 Python API：`scenarios/<case>.py` 实现 `setup_scenario(world)`。
+
+## 4. 数据流（单 tick，10 Hz 慢跑离线）
 
 ```
 t=k:
-  carla.tick()                                 # CARLA 推进物理 + agent + scenario
-  state = carla.get_world_snapshot()           # ego pose, actor poses, weather
-  obs = renderer_client.render(                # gRPC 调 gsplat service
-    scene_id, cameras=ego.cameras,
-    actors=state.actors, t=k*dt
-  )
-  obs.merge(ego_state, nav_command, route)
-  action = planner.step(obs)                   # E2E 算法
+  carla.tick()                                 # 推进 PhysX + agent
+  state = carla.get_world_snapshot()
+  for renderer in [A1, A2, B, C]:              # 四轨道 (可并行)
+      obs[renderer] = renderer.render(state)
+  # 主轨道决定下一步：
+  action = planner.step(obs[active_track])
   control = pure_pursuit(action.trajectory, ego.state)
-  carla.ego_vehicle.apply_control(control)     # 闭环回灌
-  eval.log(t, ego, action, gt?)
+  carla.ego_vehicle.apply_control(control)
+  for renderer in non_active:                  # 副轨道仅记录
+      log_obs(renderer, obs[renderer])
+  eval.log(t, ego, action, gt)
 t=k+1
 ```
 
@@ -186,57 +188,63 @@ t=k+1
 
 | # | 风险 | 概率 | 影响 | 缓解 |
 |---|---|---|---|---|
-| R1 | gsplat 3DGUT 与 DriveStudio MCMC strategy 不兼容 | 中 | 中 | 提前在 Week 1 验证；切 strategy 或 fork 后修补 |
-| R2 | 中国数据 LiDAR 不密 → 几何先验差 | 中 | 高 | patch SplatAD 的 LiDAR loss 进 gsplat；ApolloScape LiDAR 较密可兜底 |
-| R3 | rolling shutter 需精确 timestamp，ONCE 多相机同步可能不全 | 中 | 中 | 重新做时间对齐；Week 2 评估再决定是否启用 RS 模式 |
-| R4 | CARLA gRPC 渲染路由要 fork NVIDIA proto，许可证细节 | 低 | 低 | proto 定义本身可重写（schema 不享受版权）；用作 spec 参考 |
-| R5 | OSC 2.0 工具链成熟度（解析器、调试器）仍弱于 1.x | 中 | 中 | 必要时 case 库混用 1.x（ScenarioRunner 都支持） |
-| R6 | ONCE 数据获取 / 许可证（学术非商用） | 低 | 中 | MVP 期没问题；商业落地阶段需评估或更换数据 |
-| R7 | DriveStudio 没现成 ONCE adapter（要照 nuScenes 写 ~1 周） | 中 | 低 | 工作量已计入 Week 2 |
-| R8 | Bench2Drive case 是欧美场景，不能直接当中国 case | 高 | 中 | 用作"通用驾驶能力 sanity check"；中国 case 自写 |
-| R9 | CARLA UE5 渲染纯关闭运行的稳定性 | 低 | 中 | `--RenderOffScreen` + `no_rendering_mode=True` 已是官方支持模式 |
-| R10 | SparseDrive 在中国数据上未公开评测 | 中 | 低 | 先用 nuScenes 权重做迁移；必要时在 ONCE 上 FT |
+| R1 | gsplat 3DGUT 与 DriveStudio MCMC strategy 不兼容 | 中 | 中 | W1 验证；切 strategy 或 fork 后修补 |
+| R2 | 中国数据 LiDAR 不密 → 几何先验差 | 中 | 高 | patch SplatAD LiDAR loss；ApolloScape LiDAR 较密兜底 |
+| R3 | rolling shutter timestamp 同步不全 | 中 | 中 | 重对齐；W2 评估再决定是否启用 RS |
+| R4 | OSC 2.0 actor flow 是 stub | 高 | 中 | 复杂场景退 Python API；用 modifier+composition 子集 |
+| R5 | OSC 2.0 解析强依赖 carla.* | 低 | 低 | 既然 CARLA 必装无影响 |
+| R6 | ONCE 申请超 60 天 / DAIR-V2X 邮件不回 | 中 | 中 | nuScenes mini + ApolloScape + DrivingDojo HF 兜底；不阻塞 Phase 1 |
+| R7 | DriveStudio ONCE adapter 工作量 | 中 | 低 | ~1 人周已计入 |
+| R8 | Bench2Drive 锁 0.9.15，要求 0.9.16 | 低 | 低 | 0.9.15 与 0.9.16 通常 ABI 兼容；冲突时拉 0.9.15 docker 副镜像 |
+| R9 | CARLA 0.9.16 RenderOffScreen 在 H100 不稳定 | 低 | 中 | 官方支持模式；W1 hello-world 验证 |
+| R10 | SparseDriveV2 / Senna 在中国数据上未公开评测 | 中 | 低 | 先 nuScenes 权重做迁移；必要时 FT |
+| R11 | **CARLA 0.10 是 dead branch（17 个月无 patch）** | 高 | 低 | A2 标记为"实验性"，A1 才是 production；如 W1 验证 0.10 失败立即退场 |
+| R12 | **NAVSIM v2 metric 不能裸 import** | 已知 | 低 | Scene pickle adapter ~1 周已计入 D7 |
+| R13 | Senna 论文只 nuScenes 报点，无 NAVSIM v2 数字 | 已知 | 低 | 自建 harness ~1 周；先用 SparseDriveV2 出第一份报告 |
+| R14 | Cosmos HF 国内访问不稳 | 中 | 低 | HF 镜像 / 代理；权重 32GB 一次性下载 |
 
 ## 6. 评测指标（多 benchmark 联评）
 
 | Benchmark | 协议 | 关键指标 | 用途 |
 |---|---|---|---|
-| Bench2Drive | CARLA 闭环（直接复用） | DS（Driving Score） | 算法绝对能力上限，免费继承 |
-| NAVSIM v2 | 伪闭环（重放） | PDMS | 与社区可比 |
-| HUGSIM | extrapolated NVS | KID, FID | off-trajectory 渲染质量（独立于算法） |
-| 自定义 | 中国 case（OSC 2.0 + DriveStudio 重建场景） | 闭环成功率 + 舒适度 + sim2real 偏差 | 终极目标 |
+| NAVSIM v2 metric (借用) | Scene pickle adapter 接入 | EPDMS (NC/DAC/DDC/TLC × EP/TTC/LK/HC/EC) | 主报告，社区可比 |
+| Bench2Drive (CARLA 0.9.16 直接复用) | CARLA 闭环 | DS（Driving Score） | 算法绝对能力 sanity check |
+| 四轨道一致性（v4-final 独创） | 同 case × 4 renderer × 同算法 | EPDMS 方差 / KL(轨迹分布) | 跨渲染域鲁棒性，paper 角度 |
+| HUGSIM (Phase 3) | 70 序列 + extrapolated KID | HD-Score | sim2real 真闭环对照 |
 
-## 7. 死胡同（v3 已最终排除，不再考虑）
+## 7. 死胡同（v4-final 已最终排除）
 
 | 方案 | 退出原因 |
 |---|---|
-| NuRec 容器 | 训练 + 推理服务闭源 docker；预训练资产全欧美且不可再分发；CARLA tutorial 当前还坏 |
-| AlpaSim 作主线 | 默认 renderer 仅 NuRec；第三方 planner 接入未文档；外部独立复现 0；可保留作"对标 Alpamayo 0.81 基线"的参考 |
-| WorldEngine | 实际是 4 秒 NAVSIM v2 pseudo-closed-loop demo；硬绑 nuPlan；15 commits + 0 第三方复现 + arXiv 未发；改造成中国数据 ≥2 个月 |
-| SimScale 作 agent 框架 | 误读，它是 sim-real 训练辅助 |
+| NuRec 容器 | 训练管线 + 推理服务全闭源 docker；CARLA tutorial 还坏 |
+| AlpaSim 作主线 | 默认 renderer 仅 NuRec；第三方 planner 接入未文档；外部独立复现 0 |
+| WorldEngine | 4s NAVSIM v2 pseudo-loop demo；硬绑 nuPlan；arXiv 未发；改造 ≥2 月 |
+| SimScale 作 agent 框架 | 误读，是 sim-real 训练辅助 |
 | DriveArena | 2024-11 起半停滞 |
 | 纯生成式无显式 3D（Panacea/Drive-WM） | off-trajectory 几何漂移 |
 | GAIA-2/3 | 闭源 |
 | LGSVL / AirSim | 已停服 / 停更 |
-| 商业街景（百度/高德/腾讯） | ToS 禁止商业重训 |
+| 商业街景（百度/高德/腾讯） | ToS 禁止（自研也按这边界） |
 | nuScenes-CN / OpenLane-V2 中国 | 不存在 |
-| DAIR-V2X 作重建主源 | 路端固定相机非 ego-centric；改作 V2X 评测专用 |
-| 自研 case DSL | 追平 OpenDRIVE + behavior tree + ScenarioRunner 生态需 6–12 人月，纯浪费 |
-| CARLA UE5 渲染作主 | 中国资产空白；sim2real gap 大；保留作 fallback / debug |
+| DAIR-V2X 作重建主源 | 路端固定相机非 ego-centric；V 子集 22k 帧可作辅助 |
+| 自研 case DSL | 追平 OpenDRIVE + ScenarioRunner 生态需 6–12 人月 |
+| MetaDrive / Scenic / Waymax 替代 CARLA | 既然 UE 渲染要保留，CARLA 必装；多此一举 |
+| ScenarioRunner standalone | OSC 2.0 解析强依赖 carla.* 模块 |
 
-## 8. 后续阶段（v3）
+## 8. 阶段计划
 
-- 阶段 3（4–6 周）：单场景闭环 MVP — ONCE 单段 → DriveStudio 重建 → gsplat renderer service → CARLA gRPC bridge → SparseDrive 接入
-- 阶段 4（4 周）：算法接口 + 中国 case 库（OSC 2.0）批量
-- 阶段 5（4–6 周）：HUGSIM 评测 + 多算法对比 + sim2real KPI
-- 阶段 6（持续）：Cosmos / Vista 作 alternative renderer，A/B 对照
+- **Phase 1 (W1–W6)**：A1 单轨 + nuScenes mini + SparseDriveV2 → 第一份 EPDMS 报告。包含 W1 五个 hello-world + DAIR-V2X-V example 子集。
+- **Phase 2 (W7–W12)**：四轨对照（A1+A2+B+C）+ ApolloScape 北京 + DrivingDojo LoRA + Senna 接入 + 中国 case 库（OSC 2.0 + Python API mix） → 三维矩阵报告。
+- **Phase 3 (W13+)**：HUGSIM 真闭环 + ONCE 数据（如已审批）+ ReconDreamer++ off-traj 修复。
 
 ## 9. 决策演化（保留作 ADR）
 
-| 版本 | 主骨架 | 渲染 | 退出原因 |
+| 版本 | 主骨架 | 渲染 | 触发反转 |
 |---|---|---|---|
-| v1 (2026-05-08 上午) | AlpaSim 主 + SimScale 补 | NuRec | SimScale 误读为 agent 框架；NuRec 调研未完成 |
-| v2 (同日下午) | WorldEngine 主 + AlpaSim 副 | DriveStudio + gsplat | NuRec 调研发现 docker 闭源；进一步暴露 AlpaSim 接入文档缺失 |
-| **v3 (同日傍晚)** | **CARLA（headless）** | **gsplat 1.5 + DriveStudio + OmniRe** | WorldEngine 实为 4s pseudo-loop demo；CARLA gRPC 路由先例存在；OSC 2.0 case 生态成熟 |
+| v1 (2026-05-08 上午) | AlpaSim + SimScale | NuRec | SimScale 误读为 agent 框架；NuRec 调研未完 |
+| v2 (同日下午) | WorldEngine + AlpaSim | DriveStudio + gsplat | NuRec 闭源 docker 暴露；AlpaSim 第三方 planner 接入文档缺失 |
+| v3 (同日傍晚) | CARLA headless | gsplat 主 + Cosmos 副 | WorldEngine 是 4s pseudo-loop demo |
+| v4 (同日深夜) | NAVSIM v2 + 三 renderer | Cosmos 主 + gsplat 副 + CARLA UE | 用户加"离线批跑"约束；NAVSIM v2 协议与目标完美对齐；三 renderer 对照成形 |
+| **v4-final (2026-05-09)** | **CARLA 0.9.16 + 0.10 双轨 + NAVSIM v2 metric + 四 renderer** | **A1+A2+B+C** | **sanity check：CARLA 0.10 死分支风险（保留作 A2）；自研非商用约束放松所有许可担忧；nuScenes mini 作 MVP 首数据避审批；NAVSIM v2 不能裸 import EPDMS** |
 
-7 个 agent 调研报告原始资料保留在 `C:\Users\elane\AppData\Local\Temp\claude\E--test-AutoSim\` 任务输出目录，可回溯。
+13 个 agent 调研报告原始资料保留在 `C:\Users\elane\AppData\Local\Temp\claude\E--test-AutoSim\` 任务输出目录。
