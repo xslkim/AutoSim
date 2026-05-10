@@ -13,7 +13,7 @@
 | D1 | 闭环骨架 | CARLA 0.9.16 (UE4) 主 + CARLA 0.10 (UE5) 副双轨 | 🟡 |
 | D2 | MVP E2E 算法 | SparseDriveV2 主 + Senna 副；横评 Hydra-NeXt / DiffusionDrive / DriveLM / OpenEMMA | 🟢/🟡 |
 | D3 | 首个数据 | nuScenes mini (免审批 MVP) + ApolloScape 北京 + DrivingDojo HF；ONCE / DAIR-V2X 并行申请不阻塞 | 🟢 |
-| D4 | 渲染层（四轨道并列） | A1=CARLA UE4 / A2=CARLA UE5 / B=Cosmos+DrivingDojo LoRA / C=gsplat+DriveStudio | 🟢 |
+| D4 | 渲染层（四轨道并列） | A1=CARLA UE4 / A2=CARLA UE5 / B=Cosmos 双 backend (B-cn=Predict2.5+LoRA + B-av=Drive-Dreams；串行) / C=gsplat+DriveStudio | 🟢 |
 | D5 | Case 编辑 | OpenSCENARIO 2.0 + ScenarioRunner；actor flow 可能是 stub，复杂场景退 Python API | 🟡 |
 | D6 | 渲染路由 | Renderer Python ABC（无 gRPC，离线让 IPC 复杂度归零） | 🟢 |
 | D7 | 评测脚手架 | NAVSIM v2 metric 库 + 自建 Scene pickle adapter（~1 周）；HUGSIM 副线 Phase 3 接入 | 🟡 |

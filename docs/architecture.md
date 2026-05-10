@@ -10,7 +10,7 @@
 | D1 | 闭环骨架 | **CARLA 0.9.16 (UE4) 主 + CARLA 0.10 (UE5) 副双轨** | 🟡 |
 | D2 | MVP E2E 算法 | **SparseDriveV2 主 + Senna 副**；后续横评 Hydra-NeXt / DiffusionDrive / DriveLM / OpenEMMA | 🟢/🟡 |
 | D3 | 首个数据 | **nuScenes mini（免审批 MVP）+ ApolloScape 北京 + DrivingDojo HF**；ONCE / DAIR-V2X 并行申请不阻塞 | 🟢 |
-| D4 | 渲染层（四轨道并列） | A1=CARLA UE4 / A2=CARLA UE5 / B=Cosmos+DrivingDojo LoRA / C=gsplat+DriveStudio | 🟢 |
+| D4 | 渲染层（四轨道并列） | A1=CARLA UE4 / A2=CARLA UE5 / B=Cosmos 双 backend (B-cn=Predict2.5-2B+DrivingDojo LoRA + B-av=Drive-Dreams-7B；**串行不并行**) / C=gsplat+DriveStudio | 🟢 |
 | D5 | Case 编辑 | OpenSCENARIO 2.0 + ScenarioRunner；actor flow 可能是 stub | 🟡 |
 | D6 | 渲染路由 | Renderer Python ABC（无 gRPC） | 🟢 |
 | D7 | 评测脚手架 | NAVSIM v2 metric + Scene pickle adapter（~1 周）+ HUGSIM 副线 | 🟡 |
@@ -36,15 +36,15 @@
                     │
         ┌───────────┴───────────┬───────────────┬──────────────┐
         ▼                       ▼               ▼              ▼
-┌── Track A1 ───┐      ┌── Track A2 ──┐  ┌── Track B ──┐  ┌── Track C ──┐
-│ CARLA UE4     │      │ CARLA UE5     │  │ Cosmos       │  │ gsplat 3DGUT │
-│ (0.9.16)      │      │ (0.10)        │  │ Predict2.5   │  │ + DriveStudio│
-│               │      │               │  │ + DrivingDojo│  │ + ONCE/Apollo│
-│ 几何 baseline │      │ 视觉升级实验  │  │   LoRA       │  │   重建        │
-│ Bench2Drive   │      │ Lumen+Nanite  │  │ (中国感)     │  │ (sim2real    │
-│   兼容        │      │ (dead branch  │  │ Vista 备份   │  │  黄金对照)   │
-│               │      │   风险已知)   │  │              │  │               │
-└─────┬─────────┘      └──────┬───────┘  └──────┬──────┘  └──────┬──────┘
+┌── Track A1 ───┐      ┌── Track A2 ──┐  ┌── Track B (双 backend, 串行) ──┐  ┌── Track C ──┐
+│ CARLA UE4     │      │ CARLA UE5     │  │ B-cn: Predict2.5-2B            │  │ gsplat 3DGUT │
+│ (0.9.16)      │      │ (0.10)        │  │       + DrivingDojo LoRA       │  │ + DriveStudio│
+│               │      │               │  │       (中国感主报告)            │  │ + ONCE/Apollo│
+│ 几何 baseline │      │ 视觉升级实验  │  │ B-av: Drive-Dreams-7B          │  │   重建        │
+│ Bench2Drive   │      │ Lumen+Nanite  │  │       (HD map+bbox→multi-view) │  │ (sim2real    │
+│   兼容        │      │ (dead branch  │  │       AV 基座对照               │  │  黄金对照)   │
+│               │      │   风险已知)   │  │ Vista 双失败时 fallback        │  │               │
+└─────┬─────────┘      └──────┬───────┘  └──────────┬─────────────────────┘  └──────┬──────┘
       │ RGB                   │                 │                │
       └──────────┬────────────┴─────────────────┴────────────────┘
                  ▼
@@ -246,5 +246,6 @@ t=k+1
 | v3 (同日傍晚) | CARLA headless | gsplat 主 + Cosmos 副 | WorldEngine 是 4s pseudo-loop demo |
 | v4 (同日深夜) | NAVSIM v2 + 三 renderer | Cosmos 主 + gsplat 副 + CARLA UE | 用户加"离线批跑"约束；NAVSIM v2 协议与目标完美对齐；三 renderer 对照成形 |
 | **v4-final (2026-05-09)** | **CARLA 0.9.16 + 0.10 双轨 + NAVSIM v2 metric + 四 renderer** | **A1+A2+B+C** | **sanity check：CARLA 0.10 死分支风险（保留作 A2）；自研非商用约束放松所有许可担忧；nuScenes mini 作 MVP 首数据避审批；NAVSIM v2 不能裸 import EPDMS** |
+| **v4-final + D4.1 (2026-05-10)** | 同上 | A1+A2+**B(B-cn+B-av)**+C | **Track B 拆双 backend 串行**：B-cn (Predict2.5+LoRA→中国感) + B-av (Drive-Dreams→AV 高质量基座对照)；多卡放宽后用户确认串行不并行（无延迟约束 + 显存独占更稳）；Drive-Dreams 已 post-trained 在 RDS-HQ，与通用基座+LoRA 形成有意义对照 |
 
 13 个 agent 调研报告原始资料保留在 `C:\Users\elane\AppData\Local\Temp\claude\E--test-AutoSim\` 任务输出目录。
