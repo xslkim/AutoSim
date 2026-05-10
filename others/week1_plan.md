@@ -1,3 +1,9 @@
+> ⚠️ **已废弃 (2026-05-10)**：本文档按"周"组织、且把 gsplat / Cosmos / Senna / DAIR-V2X 等全部塞进 W1，与"先打通单轨闭环"的实际目标不匹配。
+> 已被 [milestone_1_plan.md](milestone_1_plan.md) 替代——后者按**任务**而非**时间**组织，并严格收敛到 CARLA UE4 + nuScenes mini + SparseDriveV2 单轨子集。
+> 本文保留作历史/调研痕迹，不再维护，不要据此执行。
+
+---
+
 # Week 1 任务清单（v4-final）
 
 > 起点：仓库为空。

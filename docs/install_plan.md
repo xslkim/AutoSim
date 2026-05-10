@@ -4,7 +4,7 @@
 > **目标**：把项目所需的全部代码仓库、Python 库、容器镜像、模型权重、数据集**下载并安装到位**。
 > **非目标**：本任务**不要求运行**任何训练/推理/CARLA 启动；只验证"装好且可见"。
 > **目标机器**：云上 H100 / V800 80G 单机（Linux x86_64）。本地 Windows 开发机不是部署目标，不要在 Windows 上装 CARLA。
-> **决策来源**：[architecture.md](architecture.md) D1–D8、[week1_plan.md](week1_plan.md)。如本文与之冲突，以 architecture.md 为准。
+> **决策来源**：[architecture.md](architecture.md) D1–D8、[milestone_1_plan.md](milestone_1_plan.md)。如本文与之冲突，以 architecture.md 为准。
 
 ---
 

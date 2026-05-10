@@ -224,4 +224,4 @@ Phase 3  W13+        "真闭环——业界顶配"
 
 ---
 
-*详细技术架构见 [docs/architecture.md](architecture.md)；W1 落地任务见 [docs/week1_plan.md](week1_plan.md)。*
+*详细技术架构见 [docs/architecture.md](architecture.md)；第一个里程碑落地任务见 [docs/milestone_1_plan.md](milestone_1_plan.md)。*

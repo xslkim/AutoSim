@@ -42,14 +42,11 @@ CARLA UE4     CARLA UE5      Cosmos+LoRA    gsplat 重建
             EPDMS 报告（× 4 轨 × N 算法）
 ```
 
-## Phase 1 W1 必跑的 5 个 hello-world
+## 第一个里程碑（单轨闭环）
 
-1. CARLA 0.9.16 H100 headless docker
-2. CARLA 0.10 同上（UE5 试验）
-3. Senna standalone 单图推理
-4. Cosmos-Predict2.5-2B HF 下载链路
-5. ScenarioRunner OSC 2.0 cut-in minimal
-- 并行：DAIR-V2X-V example 子集 + SfM 预处理
+CARLA 0.9.16 (UE4) + nuScenes mini + SparseDriveV2，按"场景定义 → 仿真核心 → 图像渲染 → 端到端算法 → 控制闭环 → 评测报告"六阶段打通。
+
+不在本里程碑：CARLA UE5 / Cosmos / Senna / gsplat / DAIR-V2X / ApolloScape / DrivingDojo / Bench2Drive 全套兼容。详见 [docs/milestone_1_plan.md](docs/milestone_1_plan.md)。
 
 ## 已退出主线（不要再考虑）
 
@@ -57,9 +54,11 @@ NuRec 容器 / AlpaSim 作主线 / WorldEngine / SimScale 作 agent / DriveArena
 
 ## 文档
 
+- [高层立项简报](docs/executive_brief.md)
 - [架构 v4-final](docs/architecture.md)
-- [Week 1 任务 v4-final](docs/week1_plan.md)
+- [Milestone 1 计划](docs/milestone_1_plan.md) — 第一个里程碑：单轨闭环打通（按任务组织）
 - [调研历程与方案演化](docs/research_journey.md) — 6 轮调研 / 15 个 agent 报告 / 4 轮架构反转的完整记录
+- ~~[Week 1 任务 v4-final](docs/week1_plan.md)~~ — 已废弃，由 Milestone 1 计划替代
 
 ## 决策演化
 

@@ -77,7 +77,7 @@ AutoSim/
 ├── requirements.txt
 ├── docs/
 │   ├── architecture.md          # 本文
-│   └── week1_plan.md
+│   └── milestone_1_plan.md      # 第一个里程碑（单轨闭环）
 ├── src/
 │   └── autosim/
 │       ├── core/                # CARLA synchronous wrapper、tick 循环
