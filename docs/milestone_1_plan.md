@@ -69,33 +69,33 @@ NAVSIM v2 metric → EPDMS report (HTML)
 > **目标机器**：A800 80G + Ubuntu 22.04 + NVIDIA driver ≥ 535 + nvidia-container-toolkit。本地 Windows 开发机不是部署目标，CARLA / SparseDriveV2 / NAVSIM 全部在 A800 机器上跑。
 
 ### 任务 0.1 Python/CUDA 环境
-- [ ] 锁定 Python 3.10 + CUDA 12.1 + PyTorch 2.4（A800 是 Ampere sm_80，PyTorch 2.4 默认轮子直接吃；不需要 sm_90 编译）
-- [ ] `environment.yml` 提交（conda env name: `autosim`）
-- [ ] ruff + pyright + pytest 配置（`pyproject.toml`）
+- [x] 锁定 Python 3.10 + CUDA 12.1 + PyTorch 2.4（A800 是 Ampere sm_80，PyTorch 2.4 默认轮子直接吃；不需要 sm_90 编译；3080 Ti sm_86 与 A800 同源 cu121 构建）
+- [x] `environment.yml` 提交（conda env name: `autosim`）
+- [x] ruff + pyright + pytest 配置（`pyproject.toml`）
 
 ### 任务 0.2 CARLA docker
-- [ ] 拉 `carlasim/carla:0.9.16` 镜像
-- [ ] A800 headless `--RenderOffScreen` 启动 Town10，30 秒不 crash（Ubuntu 22.04 + nvidia-container-toolkit；`--gpus all`）
-- [ ] 实测 fps + 显存占用记录到 `docs/milestone_1_report.md`
+- [x] 拉 `carlasim/carla:0.9.16` 镜像
+- [x] A800 headless `--RenderOffScreen` 启动 Town10，30 秒不 crash（Ubuntu 22.04 + nvidia-container-toolkit；`--gpus all`；本机 3080 Ti 实测通过）
+- [x] 实测 fps + 显存占用记录到 `docs/milestone_1_report.md`
 
 ### 任务 0.3 数据下载
-- [ ] nuScenes mini（~3GB，无审批）下载至 `data/nuscenes/mini/`
-- [ ] 校验 sample/sample_data 表加载正常（用 `nuscenes-devkit` 单测）
+- [x] nuScenes mini（~3GB，无审批）下载至 `data/nuscenes/mini/`
+- [x] 校验 sample/sample_data 表加载正常（用 `nuscenes-devkit` 单测）
 
 ### 任务 0.4 模型权重
-- [ ] SparseDriveV2 official ckpt 下载（HF 或作者 release）
-- [ ] ResNet-34 backbone 权重就绪
-- [ ] 文件路径写入 `configs/sparsedrive_v2.yaml`
+- [x] SparseDriveV2 official ckpt 下载（HF 或作者 release）
+- [x] ResNet-34 backbone 权重就绪
+- [x] 文件路径写入 `configs/sparsedrive_v2.yaml`
 
 ### 任务 0.5 Submodules
-- [ ] `git submodule add carla-simulator/scenario_runner third_party/scenario_runner`
-- [ ] `git submodule add Thinklab-SJTU/Bench2Drive third_party/bench2drive`
-- [ ] `git submodule add swc-17/SparseDriveV2 third_party/sparsedrive_v2`
+- [x] `git submodule add carla-simulator/scenario_runner third_party/scenario_runner`
+- [x] `git submodule add Thinklab-SJTU/Bench2Drive third_party/bench2drive`
+- [x] `git submodule add swc-17/SparseDriveV2 third_party/sparsedrive_v2`
 
 ### 任务 0.6 包骨架
-- [ ] 建 `src/autosim/{core,renderer/carla_ue4,kinematics,scenarios,e2e_plugins,data_adapters,eval}` 目录结构
-- [ ] 各子包 `__init__.py` 占位
-- [ ] `e2e_plugins/protocol.py` 已存在 ✅（无需改动）
+- [x] 建 `src/autosim/{core,renderer/carla_ue4,kinematics,scenarios,e2e_plugins,data_adapters,eval}` 目录结构
+- [x] 各子包 `__init__.py` 占位
+- [x] `e2e_plugins/protocol.py` 已存在 ✅（无需改动）
 
 **验收**：`pytest tests/` 空套件全绿；`docker run carlasim/carla:0.9.16 ./CarlaUE4.sh --RenderOffScreen` 不 crash；nuScenes mini `from nuscenes.nuscenes import NuScenes; NuScenes(...)` 加载成功。
 

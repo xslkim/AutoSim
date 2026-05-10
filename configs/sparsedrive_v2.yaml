@@ -1,0 +1,16 @@
+# SparseDriveV2 权重配置（任务 0.4）
+# 路径采用仓库相对路径，便于跨机器复用。
+
+model:
+  name: sparsedrive_v2
+  source: "https://github.com/swc-17/SparseDriveV2"
+  checkpoint_path: "checkpoints/sparsedrive_v2/sparsedrive_navsimv2_90p3.ckpt"
+  backbone_path: "checkpoints/sparsedrive_v2/resnet34.a1_in1k.pytorch_model.bin"
+
+downloads:
+  sparse_ckpt_url: "https://huggingface.co/wenchaosun/SparseDriveV2/resolve/main/sparsedrive_navsimv2_90p3.ckpt"
+  resnet34_url: "https://huggingface.co/timm/resnet34.a1_in1k/resolve/main/pytorch_model.bin"
+
+checksums:
+  sparse_ckpt_sha256: "b22438dbf8a5966ea532599ba6cf905e599594e758938b8fbab1f6bd257cbc4b"
+  resnet34_sha256: "f6c1d7785b5d0e796a83f9643fe2cb952ac95740daa9fb2d5c8c6514fdadaeb3"

@@ -1,0 +1,36 @@
+网络加速配置说明
+有效提升海外资源访问下载的网络稳定性和速度，解决大模型网站下载缓慢、Github访问卡顿丢包等问题。
+
+已支持加速域名： .github.com、.nvidia.com、.nvcr.io、.docker.com、.golang.org、.googlesource.com、.pythonhosted.org、.pytorch.org、.civitai.com、.huggingface.co、.anaconda.org、.conda.io、.anaconda.com、.k8s.io、.gcr.io、.wandb.ai
+
+优云智算网络加速产品通过独立 DNS 服务器提供优化解析服务，提升域名解析效率与稳定性。使用前需将示例默认 DNS 指向特定DNS解析服务器，以启用加速功能。
+
+注意：
+
+容器实例（基础镜像、社区镜像）：开通网络加速后自动配置DNS解析优化，用户无需操作
+虚机实例（系统镜像）：需要用户手动配置，以下为各操作系统云主机的具体配置步骤
+虚机实例配置 DNS 服务器地址
+请将私有网络中云主机的默认 DNS 修改为以下地址（主备顺序建议优先填写前者）：
+
+100.90.90.90
+100.90.90.100
+不同操作系统下的DNS修改方式
+Ubuntu(含20.04/22.04/24.04)
+临时修改 DNS（立即生效，重启后失效）​
+sudo vim /etc/resolv.conf
+删除原有nameserver行，添加以下内容：
+
+nameserver 100.90.90.90
+nameserver 100.90.90.100
+保存退出
+
+持久化配置（重启后保留）​打开配置文件：
+sudo vim /etc/netplan/50-cloud-init.yaml
+找到 nameservers: 区域，修改为：
+
+nameservers:
+  addresses: [100.90.90.90, 100.90.90.100]  
+保存并退出，让配置立即生效：
+
+sudo netplan apply 
+重启完成即可生效。

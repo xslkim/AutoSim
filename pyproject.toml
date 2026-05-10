@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autosim"
+version = "0.1.0"
+description = "CARLA + E2E closed-loop simulation stack (Milestone 1)"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+# PyTorch：推荐用 environment.yml 通过 conda 安装 2.4 + CUDA 12.1（与 A800 sm_80 / 3080 Ti sm_86 同一套官方 cu121 轮子）。
+# 纯 pip 环境请另装：pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "opencv-python>=4.9",
+  "pillow>=10",
+  "pyyaml>=6",
+  "tqdm>=4.66",
+  "einops>=0.7",
+  "loguru>=0.7",
+  "gsplat>=1.5.3",
+  "nerfacc>=0.5",
+  "carla>=0.9.16",
+  "diffusers>=0.30",
+  "transformers>=4.45",
+  "accelerate>=0.34",
+  "peft>=0.13",
+  "nuscenes-devkit>=1.1.11",
+  "matplotlib>=3.8",
+  "ipykernel>=6",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.6",
+  "pyright>=1.1.380",
+  "pytest>=8",
+  "pytest-cov>=5",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# --- ruff ---
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = []
+# protocol.py 为里程碑冻结接口（milestone_1_plan 任务 0.6），不在此任务中改写法
+per-file-ignores = { "src/autosim/e2e_plugins/protocol.py" = ["E501", "UP045"] }
+
+[tool.ruff.format]
+quote-style = "double"
+
+# --- pyright ---
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["**/node_modules", "**/__pycache__", ".venv", "third_party"]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+stubPath = "typings"
+
+# --- pytest ---
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["autosim"]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true
